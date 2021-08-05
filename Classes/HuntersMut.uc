@@ -61,7 +61,9 @@ function BeginHunter(DeusExPlayer Seeker){
     }
     
     foreach allactors(class'AutoTurret',at) {
-        at.bHidden = True;
+        at.Untrigger(Seeker, Seeker);
+        at.bDisabled = True;
+        at.bActive = False;
     }
       
     foreach allactors(class'AutoTurretGun',atg) {
@@ -69,7 +71,8 @@ function BeginHunter(DeusExPlayer Seeker){
     }
     
     foreach allactors(class'SecurityCamera',cam) {
-        cam.bHidden = True;
+        cam.Untrigger(Seeker, Seeker);
+        cam.bActive = False;
     }
     
     foreach allactors(class'ComputerSecurity',sc) {
