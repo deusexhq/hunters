@@ -14,6 +14,7 @@ var() config bool bUnlockDoors;
 var() config bool bGodMode;
 var() config  bool bHardMode;
 
+var() config  int HideLength;
 
 function ModifyPlayer(Pawn Other)
 {
@@ -34,6 +35,13 @@ function BeginHunter(DeusExPlayer Seeker){
     local HunterInfo h;
     local DeusExWeapon W;
     local DeusExMover mv;
+    local Teleporter tp;
+    local DatalinkTrigger dl;
+    local ComputerSecurity sc;
+    local SecurityCamera cam;
+    local AutoTurret at;
+    local AutoTurretGun atg;
+    
     
     PrimeHunter = CreatePlayerHunterInfo(Seeker);
     PrimeHunter.Hunting = True;
@@ -44,8 +52,36 @@ function BeginHunter(DeusExPlayer Seeker){
     if(IsOpenDX()) PrimeHunter.P.ConsoleCommand("CreateTeam2 Hunters");
     //BroadcastMessage("HIDE PHASE: Players are invisible, seeker is locked in position.");
     bHidePhase=True;
-    SetTimer(3,False);
-   
+    SetTimer(HideLength,False);
+    
+    foreach allactors(class'Teleporter',tp) {
+        ConsoleCommand("set teleporter bstatic 0");
+        tp.bHidden = False;
+        tp.Destroy();
+    }
+    
+    foreach allactors(class'AutoTurret',at) {
+        at.bHidden = True;
+    }
+      
+    foreach allactors(class'AutoTurretGun',atg) {
+        atg.bHidden = True;
+    }
+    
+    foreach allactors(class'SecurityCamera',cam) {
+        cam.bHidden = True;
+    }
+    
+    foreach allactors(class'ComputerSecurity',sc) {
+        sc.bHidden = True;
+    }
+    
+    foreach allactors(class'DatalinkTrigger',dl) {
+        ConsoleCommand("set DatalinkTrigger bstatic 0");
+        dl.bHidden = False;
+        dl.Destroy();
+    }
+        
     if(bHideWeapons){
         foreach allactors(class'DeusExWeapon',W) {
             W.bHidden = True;
@@ -292,4 +328,5 @@ defaultproperties
 {
     bHideWeapons=True
     bUnlockDoors=True
+    HideLength=60
 }

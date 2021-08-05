@@ -21,10 +21,10 @@ mutate hunter.start.random (Not yet implemented)
 - [ ] Entity removal
     - [X] Weapons
         - [X] Reversible once game is over.
-    - [ ] Security terminals
-    - [ ] Autoturret guns
-    - [ ] Map exits
-    - [ ] Datalink triggers (Can I even do this?)
+    - [X] Security terminals
+    - [X] Autoturret guns
+    - [X] Map exits
+    - [X] Datalink triggers (Can I even do this?)
 - [ ] Alerts
     - [X] "Player found by X"
     - [X] List players still to find.
@@ -39,7 +39,8 @@ mutate hunter.start.random (Not yet implemented)
 - [ ] Random hunter
 - [X] Disable IFF
     - [X] Hooking OpenDX extended HUD
-- [X] Option to unlock all doors each round
+- [ ] Option to unlock all doors each round
+    - [ ] Attempt 1 (bLocked = False) failed
 - [ ] Unlock all hackable devices
     - [ ] Need to find a method that works.
 - [ ] Automatic map rotation
