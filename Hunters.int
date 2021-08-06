@@ -1,0 +1,3 @@
+[Public]
+Object=(Name=Hunters.HuntersMut,Class=Class,MetaClass=Engine.Mutator,Description="Hunters HS")
+Preferences=(Caption="Hunters",Parent="Advanced Options",Class=Hunters.HuntersMut,Immediate=True)
