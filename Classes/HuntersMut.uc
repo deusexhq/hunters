@@ -3,33 +3,35 @@
 //=============================================================================
 class HuntersMut extends Mutator Config (Hunters);
 
-var HunterInfo PrimeHunter;
-var int HideRound;
-var bool bHSOn;
-var bool bHidePhase; 
-var int Loops;
+var HunterInfo PrimeHunter; //The MC of each round
+var int HideRound; //How many rounds have we done
+var bool bHSOn; //Are we active
+var bool bHidePhase; //Phase where players can hide from the hunter
+var int Loops; //How many times has the round timer looped, can be used to measure how long the round has gone on for
+var bool bEndless; //Does a new round begin right after the last one ended automatically?
+var bool bWaitingNewRound; //Are we currently between two endless rounds?
+var bool bFinalRound; //Have we designated that Endless will end after this round?
 
-var() config bool bHideWeapons;
-var() config bool bUnlockDoors;
-var() config bool bGodMode;
-var() config  bool bHardMode;
+var() config bool bDebug;
+var() config bool bHideWeapons; //Hides weapons in the map when game is active
+var() config bool bUnlockDoors; //Unlocks all doors in the map
+var() config bool bGodMode; //No damage for players while game is active
+var() config  bool bHardMode; //Limited number of attempts by the hunters
+var() config  int TimeBetweenRounds; //How long do we wait between endless rounds before starting a new one
+var() config  int TimeToHide; //How long do players have to hide before the hunter is let loose.
+var() config  int OutputMod; //Used to check wether player info should be displayed
 
-var() config  int HideLength;
-
-function ModifyPlayer(Pawn Other)
-{
+function ModifyPlayer(Pawn Other){
     local DeusExPlayer P;
-
     P = DeusExPlayer(Other);
 
-    //if(P==PrimeHunter) GiveHunterWeapon(P);
+    // Give players on the hunter team the weapon when they respawn
     if(hasHunterPlayerInfo(P) && GetHunterPlayerInfo(P).Hunting) GiveHunterWeapon(P);
     Super.ModifyPlayer(Other);
 }
 
+
 function BeginHunter(DeusExPlayer Seeker){
-    // iterate all players
-    // If OpenDX is found, set players teams
     // God everyone -- scratch that, use a takedamage mutator hook to disable damage against players while HS is on
     local DeusExPlayer DXP;
     local HunterInfo h;
@@ -41,18 +43,30 @@ function BeginHunter(DeusExPlayer Seeker){
     local SecurityCamera cam;
     local AutoTurret at;
     local AutoTurretGun atg;
-    
-    
+    local MissionScript ms;
+
+    //Defining our main character of the round
     PrimeHunter = CreatePlayerHunterInfo(Seeker);
     PrimeHunter.Hunting = True;
     Seeker.bHidden=False;
     HideRound++;
-    BroadcastMessage("|P2Hunters game has begun. [Round "$HideRound$"]");
-    BroadcastMessage(Seeker.PlayerReplicationInfo.PlayerName$" is now a Hunter.");
-    if(IsOpenDX()) PrimeHunter.P.ConsoleCommand("CreateTeam2 Hunters");
-    //BroadcastMessage("HIDE PHASE: Players are invisible, seeker is locked in position.");
+    //bFinalRound = False;
+    bWaitingNewRound = False;
+    BroadcastMessage("[Hunt] |P2Hunters game has begun. [Round "$HideRound$"]");
+    BroadcastMessage("[Hunt] "$Seeker.PlayerReplicationInfo.PlayerName$" is now a Hunter.");
+    if(IsOpenDX()) PrimeHunter.P.ConsoleCommand("CreateTeam2 Hunters"); //If OpenDX is installed, set the hunter to a team to show in the scoreboard
+
+    //Giving players the hide phase
     bHidePhase=True;
-    SetTimer(HideLength,False);
+    SetTimer(TimeToHide,False);
+    
+    
+    //Map cleanup actions
+    foreach allactors(class'MissionScript',ms) {
+        ConsoleCommand("set MissionScript bstatic 0");
+        ms.bHidden = False;
+        ms.Destroy();
+    }
     
     foreach allactors(class'Teleporter',tp) {
         ConsoleCommand("set teleporter bstatic 0");
@@ -88,26 +102,32 @@ function BeginHunter(DeusExPlayer Seeker){
     if(bHideWeapons){
         foreach allactors(class'DeusExWeapon',W) {
             W.bHidden = True;
+            if(W.Owner != None) w.Destroy();
         }
     }
     
     if(bUnlockDoors){
-        foreach allactors(class'DeusExMover', mv) {
-            mv.bLocked = False;
-        }
+        //foreach allactors(class'DeusExMover', mv) {
+            //mv.bLocked = False;
+        //}
     }
 
     
     foreach allactors(class'DeusExPlayer',DXP) {
+        //If OpenDX is installed, turn off the IFF
         if(IsOpenDX()){
             DXP.SetPropertyText("HUD_Type", "HUD_Off");
             
         }
+        
         if(!DXP.isinState('Spectating') && DXP != Seeker) {
-            DXP.ClientMessage("You are a hider, hide somewhere that Hunter "$GetName(Seeker)$" may not find you!");
+            DXP.ClientMessage("You are hiding, hide somewhere that Hunter "$GetName(Seeker)$" may not find you!");
+            //Create the info for the player to store their data
             h = CreatePlayerHunterInfo(DXP);
             h.Hunting = False;
             DXP.bHidden=True;
+            
+            // If OpenDX is installed, set their ODXDM Team Name
             if(IsOpenDX()){
                 DXP.SetPropertyText("TeamName", "Hiding");
                 DXP.PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "Hiding");
@@ -118,18 +138,25 @@ function BeginHunter(DeusExPlayer Seeker){
 }
 
 function CleanupHunter(){
-    //Degod everyone
-    //Remove players OpenDX teams
     local WeaponHunter PGS;
     local HunterInfo inf;
     local DeusExPlayer DXP;
     local DeusExWeapon w;
+    
+    // Loop time
+    // Hooking the game end function to redirect to starting a new round if we're in endless mode
+    if(bEndless && !bFinalRound){
+        SetTimer(TimeBetweenRounds, false);
+        bWaitingNewRound = True;
+        BroadcastMessage("|P7[Hunt] A new round will begin soon...");
+    } 
+    
+    // Wether or not we're in endless mode, let's cleanup the last round
     bHSOn = False;
+    
     foreach allactors(class'WeaponHunter',PGS) PGS.Destroy();
-    foreach allactors(class'HunterInfo',inf) PGS.Destroy();
-    foreach allactors(class'DeusExWeapon',W) {
-        W.bHidden = False;
-    }
+    foreach allactors(class'HunterInfo',inf) inf.Destroy();
+    foreach allactors(class'DeusExWeapon',W) W.bHidden = False;
     
     foreach allactors(class'DeusExPlayer',DXP) {
         if(IsOpenDX()){
@@ -138,122 +165,161 @@ function CleanupHunter(){
             DXP.PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "");
         }
     }
-        
 }
 
-function PostBeginPlay ()
-{
+function PostBeginPlay (){
     Level.Game.BaseMutator.AddMutator (Self);
     bHSOn=False;
     HideRound = 0;
     //super.PostBeginPlay();
 }
 
+// OpenDX check
+// Allows for checking if the mod is running, without requiring it as a dependency, so THIS mod can integrate with it, but also work without it
 function bool IsOpenDX(){
     local class<actor> testclass;
     local bool good;
     
+    // Try to load an OpenDX player class
     testclass = class<actor>( DynamicLoadObject( "OpenDX.TCPlayer", class'Class' ) );
-    Log(testclass);
+
+    // If testclass is not None, it means TCPlayer exists on the server, so we can infer that OpenDX is running
     if(testclass != None)
         return true;
     else
         return false;
 }
-function Timer()
-{
+
+function Timer(){
     local DeusExPlayer dxp;
     local HunterInfo h;
     local int hunters, hiders, total;
-    if(!bHSOn) return;
     
-    if(bHidePhase){
-        BroadcastMessage("|P2The hunt is on.");
+    // Do nothing if game is not running
+    if(!bHSOn && !bWaitingNewRound) return;
+    
+    // If we're in endless and waiting for a new round, start the next round
+    if(bWaitingNewRound){
+        BroadcastMessage("|P2[Hunt] A new round begins!");
+        BeginHunter(GetRandomPlayer());
+    } else if(bHidePhase){
+        // If we're in hide phase, switch to main phase
+        BroadcastMessage("|P2[Hunt] The hunt is on.");
         bHidePhase=False;
         GiveHunterWeapon(PrimeHunter.P);
-        foreach allactors(class'DeusExPlayer',DXP)
-        {
-            if(!DXP.isinState('Spectating'))
-            {
+        foreach allactors(class'DeusExPlayer',DXP) {
+            if(!DXP.isinState('Spectating')) {
                 DXP.bHidden=False;
             }
         }
-        SetTimer(10, False);
+        //Start the timer loop for displaying player info
+        SetTimer(1, False);
     } else {
+        //We're in a game, so let's show some info
+        
+        //Count each team's player count
         foreach AllActors(class'HunterInfo', h){ 
-            if(h.Hunting) { hunters++;
+            if(h.Hunting) { 
+                hunters++;
             } else {
-                if(Loops % 30 == 0) BroadcastMessage("|P4Still hiding: "$GetName(h.p)); 
+                //Every OutputMod seconds, show the list
+                if(Loops % OutputMod == 0) BroadcastMessage("|P4[Hunt] Still hiding: "$GetName(h.p)); 
                 hiders++;
             }
             total++;
         }
         
+        //Handling what we've counted
+        
+        //If there are no hunters (They left, maybe?) end the game as it is now unwinnable.
         if(hunters == 0){
-            BroadcastMessage("|P2No hunters left. Game over.");
+            BroadcastMessage("|P2[Hunt] No hunters left. Game over.");
             CleanupHunter();
         }
+        
+        //If all hiders have been fond, end the game.
         if(hiders == 0){
-            BroadcastMessage("|P2Everyone has been found! Game over.");
+            BroadcastMessage("|P2[Hunt] Everyone has been found! Game over.");
             CleanupHunter();
         }
-        Loops++;
-        SetTimer(1, False);
+        
+        // IF the game didn't end from the previous checks, schedule the next loop
+        if(bHSOn){
+            Loops++;
+            SetTimer(1, False);
+        }
+
     }
 }
 
-function Mutate (String S, PlayerPawn PP)
-{
-    local int ID, JSlot;
-    local string part, pg;
-    local Pawn APawn;
-    local DeusExPlayer DXP;
-
+function Mutate (String S, PlayerPawn PP){
+    local HunterInfo h;
+    local int hunters, hiders, total;
+    
+    //Keep the mutator chain linked
     Super.Mutate (S, PP);
     
-        if(S ~= "GameCommands")
-        {
-        }
-        
-        if(S ~= "Games")
-        {
-            
-            if(bHSOn) //TODO update this for handling through HunterInfos
-            {
-                BroadcastMessage("Hide and Seek is active! [Round "$HideRound$"]");
-                BroadcastMessage("Seeker: "$PrimeHunter.P.PlayerReplicationInfo.PlayerName);
-
-            }
-        }
     
-        
-        if(S ~= "hunter.start" && !bHSOn  ) 
-        {
-            bHSOn=True;
+    if(S ~= "hunt.help") {
+        PP.ClientMessage("Commands: hunt, hunt.start, hunt.random, hunt.endless, hunt.end, hunt.reset");
+    }
+    
+    if(S ~= "hunt") {
+        if(bHSOn) {
+            BroadcastMessage("[Hunt] |P7Game is active! [Round "$HideRound$"]");
+            BroadcastMessage("[Hunt] Prime Hunter: "$PrimeHunter.P.PlayerReplicationInfo.PlayerName);
 
-            BeginHunter(DeusExPlayer(PP));
+            foreach AllActors(class'HunterInfo', h){ 
+                if(h.Hunting) {
+                    BroadcastMessage("[Hunt] |P2HUNTER: "$GetName(h.p)); 
+                    hunters++;
+                } else {
+                    BroadcastMessage("[Hunt] |P4HIDER: "$GetName(h.p)); 
+                    hiders++;
+                }
+                
+                total++;
+            }
+            BroadcastMessage("[Hunt]"@hunters@"players are hunting,"@hiders@"are hiding, out of"@total@"total players.");
 
+        } else {
+            pp.ClientMessage("No game currently running. Use `mutate hunt.start` to begin.");
         }
-        
-        if(S ~= "hunter.start.random" && !bHSOn  ) 
-        {
-            bHSOn=True;
-            //TODO select random user
+    }
 
-            BeginHunter(DeusExPlayer(PP));
+    
+    if(S ~= "hunt.start" && !bHSOn  ) {
+        bHSOn=True;
 
-        }
-        
-        if(S ~= "HideEnd" && bHSOn && DeusExPlayer(PP).bAdmin)
-        {
-            CleanupHunter();
-        }
-        
-        if( DeusExPlayer(PP).bAdmin && S ~= "ClearScore"  && !bHSOn )
-        {
-            BroadcastMessage("Scoreboard reset.");
-            ResetScores();
-        }
+        BeginHunter(DeusExPlayer(PP));
+    }
+    
+    if(S ~= "hunt.random" && !bHSOn  ) {
+        bHSOn=True;
+        BeginHunter(GetRandomPlayer());
+    }
+    
+    if(S ~= "hunt.endless" && !bHSOn  ) {
+        bHSOn=True;
+        bEndless=True;
+        bFinalRound=False;
+        BeginHunter(GetRandomPlayer());
+    }
+    
+    if(S ~= "hunt.end" && bHSOn && DeusExPlayer(PP).bAdmin) {
+        bEndless = False;
+        CleanupHunter();
+    }
+    
+    if(S ~= "hunt.final" && bHSOn && DeusExPlayer(PP).bAdmin) {
+        bFinalRound = True;
+        BroadcastMessage("[Hunt] This will be the final round.");
+    }
+    
+    if( DeusExPlayer(PP).bAdmin && S ~= "hunt.reset"  && !bHSOn ) {
+        BroadcastMessage("Scoreboard reset.");
+        ResetScores();
+    }
 }
 
 
@@ -261,6 +327,31 @@ function Mutate (String S, PlayerPawn PP)
 
 
 
+function debugLog(string ln){
+    if(bDebug) Log(ln, 'HUNTDBG');
+}
+function DeusExPlayer GetRandomPlayer(){
+    local DeusExPlayer players[32];
+    local int lim, selector;
+    local DeusExPlayer potential;
+    lim = 0;
+    debugLog("Selecting random...");
+    foreach AllActors(class'DeusExPlayer', potential){
+        if(!potential.isinState('Spectating')){
+            players[lim] = potential;
+            log(lim$" "$potential);
+            lim++;
+        }
+    }
+    debugLog("final limit "$lim);
+    
+    selector = Rand(lim);
+    debugLog("selector "$selector);
+    if(players[selector] == None) selector--;
+    debugLog("selector after mod "$selector);
+    debugLog("Returning "$players[selector].PlayerReplicationInfo.playername);
+    return players[selector];
+}
 
 function ResetScores()
 {
@@ -331,5 +422,7 @@ defaultproperties
 {
     bHideWeapons=True
     bUnlockDoors=True
-    HideLength=60
+    TimeToHide=60
+    TimeBetweenRounds=5
+    OutputMod=30
 }
