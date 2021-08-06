@@ -10,8 +10,13 @@ ServerActors=Hunters.HuntersMut
 
 ## Running
 ```
-mutate hunter.start
-mutate hunter.start.random (Not yet implemented)
+mutate hunt
+mutate hunt.help
+mutate hunt.start
+mutate hunt.random
+mutate hunt.endless
+mutate hunt.final
+mutate hunt.end
 ```
 
 ## TODO
@@ -33,10 +38,10 @@ mutate hunter.start.random (Not yet implemented)
     - [X] In theory fixed just due to how the new framework works.
 - [X] Fix players loosing the item
     - [X] Item should now be given each respawn to any player that needs it.
-- [ ] Endless mode
-    - [ ] Automatically start new round when one ends with a random hunter
+- [X] Endless mode
+    - [X] Automatically start new round when one ends with a random hunter
 - [ ] Max timer for round.
-- [ ] Random hunter
+- [X] Random hunter
 - [X] Disable IFF
     - [X] Hooking OpenDX extended HUD
 - [ ] Option to unlock all doors each round
