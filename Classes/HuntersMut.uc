@@ -3,6 +3,13 @@
 //=============================================================================
 class HuntersMut extends Mutator Config (Hunters);
 
+#exec AUDIO IMPORT FILE="Sounds\begin.wav" NAME="h_begin" GROUP="Generic"
+#exec AUDIO IMPORT FILE="Sounds\huntison.wav" NAME="h_huntison" GROUP="Generic"
+#exec AUDIO IMPORT FILE="Sounds\confirmed.wav" NAME="h_confirmed" GROUP="Generic"
+#exec AUDIO IMPORT FILE="Sounds\caught.wav" NAME="h_caught" GROUP="Generic"
+#exec AUDIO IMPORT FILE="Sounds\errored.wav" NAME="h_errored" GROUP="Generic"
+#exec AUDIO IMPORT FILE="Sounds\alert.wav" NAME="h_alert" GROUP="Generic"
+
 var HunterInfo PrimeHunter; //The MC of each round
 var int HideRound; //How many rounds have we done
 var bool bHSOn; //Are we active
@@ -16,10 +23,26 @@ var() config bool bDebug;
 var() config bool bHideWeapons; //Hides weapons in the map when game is active
 var() config bool bUnlockDoors; //Unlocks all doors in the map
 var() config bool bGodMode; //No damage for players while game is active
-var() config  bool bHardMode; //Limited number of attempts by the hunters
-var() config  int TimeBetweenRounds; //How long do we wait between endless rounds before starting a new one
-var() config  int TimeToHide; //How long do players have to hide before the hunter is let loose.
-var() config  int OutputMod; //Used to check wether player info should be displayed
+var() config bool bHardMode; //Limited number of attempts by the hunters
+var() config int HardModeDamage;
+var() config int TimeBetweenRounds; //How long do we wait between endless rounds before starting a new one
+var() config int TimeToHide; //How long do players have to hide before the hunter is let loose.
+var() config int OutputMod; //Used to check wether player info should be displayed
+var() config bool bLighting; //Highlight hunters with a light effect?
+var() config bool bPlaySounds; //Use sound effects?
+
+var() config ELightType HunterLightType;
+var() config ELightEffect HunterLightEffect;
+var() config byte HunterLightRadius;
+var() config byte HunterLightBrightness;
+var() config byte HunterLightSaturation;
+var() config byte HunterLightHue;
+
+var() config sound HuntBeginSnd; //begin
+var() config sound HuntRoundStartSnd; //huntison
+var() config sound HunterCatchSnd; //confirmed
+var() config sound PlayerCaughtSnd; //caught
+var() config sound HunterErrorSnd; //errored
 
 function ModifyPlayer(Pawn Other){
     local DeusExPlayer P;
@@ -29,7 +52,6 @@ function ModifyPlayer(Pawn Other){
     if(hasHunterPlayerInfo(P) && GetHunterPlayerInfo(P).Hunting) GiveHunterWeapon(P);
     Super.ModifyPlayer(Other);
 }
-
 
 function BeginHunter(DeusExPlayer Seeker){
     // God everyone -- scratch that, use a takedamage mutator hook to disable damage against players while HS is on
@@ -47,10 +69,10 @@ function BeginHunter(DeusExPlayer Seeker){
 
     //Defining our main character of the round
     PrimeHunter = CreatePlayerHunterInfo(Seeker);
+    if(bLighting) LightUp(Seeker);
     PrimeHunter.Hunting = True;
     Seeker.bHidden=False;
     HideRound++;
-    //bFinalRound = False;
     bWaitingNewRound = False;
     BroadcastMessage("[Hunt] |P2Hunters game has begun. [Round "$HideRound$"]");
     BroadcastMessage("[Hunt] "$Seeker.PlayerReplicationInfo.PlayerName$" is now a Hunter.");
@@ -60,6 +82,7 @@ function BeginHunter(DeusExPlayer Seeker){
     bHidePhase=True;
     SetTimer(TimeToHide,False);
     
+    PlayToEveryone(HuntBeginSnd);
     
     //Map cleanup actions
     foreach allactors(class'MissionScript',ms) {
@@ -154,17 +177,20 @@ function CleanupHunter(){
     // Wether or not we're in endless mode, let's cleanup the last round
     bHSOn = False;
     
-    foreach allactors(class'WeaponHunter',PGS) PGS.Destroy();
-    foreach allactors(class'HunterInfo',inf) inf.Destroy();
-    foreach allactors(class'DeusExWeapon',W) W.bHidden = False;
-    
+
     foreach allactors(class'DeusExPlayer',DXP) {
         if(IsOpenDX()){
             DXP.SetPropertyText("HUDType", "HUD_Extended");
             DXP.SetPropertyText("TeamName", "");
             DXP.PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "");
         }
+        if(bLighting) LightOff(dxp);
     }
+    
+    foreach allactors(class'WeaponHunter',PGS) PGS.Destroy();
+    foreach allactors(class'HunterInfo',inf) inf.Destroy();
+    foreach allactors(class'DeusExWeapon',W) W.bHidden = False;
+    
 }
 
 function PostBeginPlay (){
@@ -203,6 +229,7 @@ function Timer(){
         BroadcastMessage("|P2[Hunt] A new round begins!");
         BeginHunter(GetRandomPlayer());
     } else if(bHidePhase){
+        PlayToEveryone(HuntRoundStartSnd);
         // If we're in hide phase, switch to main phase
         BroadcastMessage("|P2[Hunt] The hunt is on.");
         bHidePhase=False;
@@ -255,13 +282,14 @@ function Timer(){
 function Mutate (String S, PlayerPawn PP){
     local HunterInfo h;
     local int hunters, hiders, total;
+    local string marg, mkey, mval;
     
     //Keep the mutator chain linked
     Super.Mutate (S, PP);
     
     
     if(S ~= "hunt.help") {
-        PP.ClientMessage("Commands: hunt, hunt.start, hunt.random, hunt.endless, hunt.end, hunt.reset");
+        PP.ClientMessage("Commands: hunt, hunt.start, hunt.random, hunt.endless, hunt.end, hunt.set <config key> <config value>, hunt.reset");
     }
     
     if(S ~= "hunt") {
@@ -284,6 +312,10 @@ function Mutate (String S, PlayerPawn PP){
 
         } else {
             pp.ClientMessage("No game currently running. Use `mutate hunt.start` to begin.");
+            BroadcastMessage("Time to hide: "$TimeToHide);
+            BroadcastMessage("Time between rounds (E): "$TimeBetweenRounds);
+            BroadcastMessage("Hard Mode: "$bHardMode);
+            
         }
     }
 
@@ -316,6 +348,15 @@ function Mutate (String S, PlayerPawn PP){
         BroadcastMessage("[Hunt] This will be the final round.");
     }
     
+    if(Left(s, 9) == "hunt.set " && PP.bAdmin){
+        marg = Right(S, Len(S) - 9);
+        mval = Splitter(marg, " ", 0);
+        mkey = Splitter(marg, " ", 1);
+        PP.ClientMessage("Setting "$mkey$" = "$mval);
+        SetPropertyText(mkey, mval);
+        SaveConfig();
+    }
+    
     if( DeusExPlayer(PP).bAdmin && S ~= "hunt.reset"  && !bHSOn ) {
         BroadcastMessage("Scoreboard reset.");
         ResetScores();
@@ -325,6 +366,28 @@ function Mutate (String S, PlayerPawn PP){
 
 
 
+function LightUp(DeusExPlayer dxp){
+    GetHunterPlayerInfo(dxp).AddLight();
+}
+
+function LightOff(DeusExPlayer dxp){
+    GetHunterPlayerInfo(dxp).DeleteLight();
+}
+
+function PlayToEveryone(sound snd){
+    local DeusExPlayer P;
+    foreach AllActors(class'DeusExPlayer', p) p.ClientPlaySound(snd);
+}
+
+function string Splitter(string s, string at, int index){
+    local string outl, outr;
+    
+    outr = Right(s, Len(s)-instr(s,at)-Len(at));
+    outl = Left(s, InStr(s,at));
+    
+    if(index == 0) return outr;
+    else return outl;
+}
 
 
 function debugLog(string ln){
@@ -425,4 +488,15 @@ defaultproperties
     TimeToHide=60
     TimeBetweenRounds=5
     OutputMod=30
+    bPlaySounds=True
+    HardModeDamage=10
+    HuntBeginSnd=Sound'h_begin'
+    HuntRoundStartSnd=Sound'h_huntison'
+    HunterCatchSnd=Sound'h_confirmed'
+    PlayerCaughtSnd=Sound'h_caught'
+    HunterErrorSnd=Sound'h_errored'
+    HunterLightType=LT_Steady
+    HunterLightBrightness=64
+    HunterLightRadius=8
+    bLighting=True
 }

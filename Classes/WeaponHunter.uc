@@ -52,6 +52,9 @@ function ProcessTraceHit(Actor Other, Vector HitLocation, Vector HitNormal, Vect
     local HuntersMut hm;
     local HunterInfo inf;
     local DeusExPlayer me, them;
+    local bool bGood;
+    
+    bGood = False;
     
     me = DeusExPlayer(Owner);
     
@@ -68,7 +71,21 @@ function ProcessTraceHit(Actor Other, Vector HitLocation, Vector HitNormal, Vect
             inf.Hunting = True;
             BroadcastMessage("|P7"$them.PlayerReplicationInfo.PlayerName$" was caught by "$me.PlayerReplicationInfo.PlayerName);
             WorldMutator.GiveHunterWeapon(them);
+            WorldMutator.LightUp(them);
+            bGood = True;
+            if(WorldMutator.bPlaySounds) me.ClientPlaySound(WorldMutator.HunterCatchSnd);
+            if(WorldMutator.bPlaySounds) them.ClientPlaySound(WorldMutator.PlayerCaughtSnd);
+            if(WorldMutator.IsOpenDX()){
+                them.SetPropertyText("TeamName", "Hunters");
+                them.PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "Hunters");
+            }
         }
+    }
+    
+    if(!bGood && WorldMutator.bHardMode){
+        if(WorldMutator.bPlaySounds) me.ClientPlaySound(WorldMutator.HunterErrorSnd);
+        DeusExPlayer(Owner).ClientMessage("|P2That was a bad guess!");
+        DeusExPlayer(Owner).TakeDamage(WorldMutator.HardModeDamage, DeusExPlayer(Owner), Owner.Location, vect(0,0,1),'Shot');
     }
 }
 

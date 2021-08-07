@@ -16,6 +16,7 @@ mutate hunt.start
 mutate hunt.random
 mutate hunt.endless
 mutate hunt.final
+mutate hunt.set <key> <value>
 mutate hunt.end
 ```
 
@@ -30,10 +31,11 @@ mutate hunt.end
     - [X] Autoturret guns
     - [X] Map exits
     - [X] Datalink triggers (Can I even do this?)
-- [ ] Alerts
+- [X] Alerts
     - [X] "Player found by X"
     - [X] List players still to find.
-    - [ ] Sound effect
+    - [X] Sound effect
+    - [X] Lighting
 - [X] Fix leaving/joining breaking the counting
     - [X] In theory fixed just due to how the new framework works.
 - [X] Fix players loosing the item
@@ -44,10 +46,6 @@ mutate hunt.end
 - [X] Random hunter
 - [X] Disable IFF
     - [X] Hooking OpenDX extended HUD
-- [ ] Option to unlock all doors each round
-    - [ ] Attempt 1 (bLocked = False) failed
-- [ ] Unlock all hackable devices
-    - [ ] Need to find a method that works.
 - [ ] Automatic map rotation
     - [ ] Store list of valid maps in config
     - [ ] Index of current map as a config
