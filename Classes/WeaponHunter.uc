@@ -67,6 +67,7 @@ function ProcessTraceHit(Actor Other, Vector HitLocation, Vector HitNormal, Vect
             inf.FoundBy = me;
             inf.Hunting = True;
             BroadcastMessage("|P7"$them.PlayerReplicationInfo.PlayerName$" was caught by "$me.PlayerReplicationInfo.PlayerName);
+            WorldMutator.GiveHunterWeapon(them);
         }
     }
 }

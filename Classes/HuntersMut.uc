@@ -116,7 +116,7 @@ function BeginHunter(DeusExPlayer Seeker){
     foreach allactors(class'DeusExPlayer',DXP) {
         //If OpenDX is installed, turn off the IFF
         if(IsOpenDX()){
-            DXP.SetPropertyText("HUD_Type", "HUD_Off");
+            DXP.SetPropertyText("HUDType", "HUD_Off");
             
         }
         
@@ -160,7 +160,7 @@ function CleanupHunter(){
     
     foreach allactors(class'DeusExPlayer',DXP) {
         if(IsOpenDX()){
-            DXP.SetPropertyText("HUD_Type", "HUD_Extended");
+            DXP.SetPropertyText("HUDType", "HUD_Extended");
             DXP.SetPropertyText("TeamName", "");
             DXP.PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "");
         }
