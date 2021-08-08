@@ -9,7 +9,7 @@ class HuntersMut extends Mutator Config (Hunters);
 #exec AUDIO IMPORT FILE="Sounds\caught.wav" NAME="h_caught" GROUP="Generic"
 #exec AUDIO IMPORT FILE="Sounds\errored.wav" NAME="h_errored" GROUP="Generic"
 #exec AUDIO IMPORT FILE="Sounds\alert.wav" NAME="h_alert" GROUP="Generic"
-
+#exec AUDIO IMPORT FILE="Sounds\gameover.wav" NAME="h_gameover" GROUP="Generic"
 var HunterInfo PrimeHunter; //The MC of each round
 var int HideRound; //How many rounds have we done
 var bool bHSOn; //Are we active
@@ -24,6 +24,8 @@ var() config bool bHideWeapons; //Hides weapons in the map when game is active
 var() config bool bUnlockDoors; //Unlocks all doors in the map
 var() config bool bGodMode; //No damage for players while game is active
 var() config bool bHardMode; //Limited number of attempts by the hunters
+var() config bool bTimeLimit;
+var() config int TimeLimit;
 var() config int HardModeDamage;
 var() config int TimeBetweenRounds; //How long do we wait between endless rounds before starting a new one
 var() config int TimeToHide; //How long do players have to hide before the hunter is let loose.
@@ -43,6 +45,7 @@ var() config sound HuntRoundStartSnd; //huntison
 var() config sound HunterCatchSnd; //confirmed
 var() config sound PlayerCaughtSnd; //caught
 var() config sound HunterErrorSnd; //errored
+var() config sound GameOverSnd; //gameover
 
 function ModifyPlayer(Pawn Other){
     local DeusExPlayer P;
@@ -176,7 +179,7 @@ function CleanupHunter(){
     
     // Wether or not we're in endless mode, let's cleanup the last round
     bHSOn = False;
-    
+    Loops = 0;
 
     foreach allactors(class'DeusExPlayer',DXP) {
         if(IsOpenDX()){
@@ -197,6 +200,7 @@ function PostBeginPlay (){
     Level.Game.BaseMutator.AddMutator (Self);
     bHSOn=False;
     HideRound = 0;
+    Loops = 0;
     //super.PostBeginPlay();
 }
 
@@ -220,6 +224,7 @@ function Timer(){
     local DeusExPlayer dxp;
     local HunterInfo h;
     local int hunters, hiders, total;
+    local int timeRemaining;
     
     // Do nothing if game is not running
     if(!bHSOn && !bWaitingNewRound) return;
@@ -250,7 +255,7 @@ function Timer(){
                 hunters++;
             } else {
                 //Every OutputMod seconds, show the list
-                if(Loops % OutputMod == 0) BroadcastMessage("|P4[Hunt] Still hiding: "$GetName(h.p)); 
+                if(Loops % OutputMod == 0) BroadcastMessage("|P4Still hiding: "$GetName(h.p)); 
                 hiders++;
             }
             total++;
@@ -261,19 +266,27 @@ function Timer(){
         //If there are no hunters (They left, maybe?) end the game as it is now unwinnable.
         if(hunters == 0){
             BroadcastMessage("|P2[Hunt] No hunters left. Game over.");
+            PlayToEveryone(GameOverSnd);
             CleanupHunter();
         }
         
         //If all hiders have been fond, end the game.
         if(hiders == 0){
             BroadcastMessage("|P2[Hunt] Everyone has been found! Game over.");
+            PlayToEveryone(GameOverSnd);
             CleanupHunter();
         }
         
         // IF the game didn't end from the previous checks, schedule the next loop
         if(bHSOn){
             Loops++;
-            SetTimer(1, False);
+            timeRemaining = TimeLimit - Loops;
+            if(bTimeLimit && Loops % 30 == 0) BroadcastMessage("|P2"$timeRemaining$" seconds remaining for this hunt.");
+            if(bTimeLimit && Loops > TimeLimit) {
+                BroadcastMessage("|P2[Hunt] Hunter failed to find everyone. Game over.");
+                CleanupHunter();
+                PlayToEveryone(GameOverSnd);
+            } else SetTimer(1, False);
         }
 
     }
@@ -294,21 +307,21 @@ function Mutate (String S, PlayerPawn PP){
     
     if(S ~= "hunt") {
         if(bHSOn) {
-            BroadcastMessage("[Hunt] |P7Game is active! [Round "$HideRound$"]");
-            BroadcastMessage("[Hunt] Prime Hunter: "$PrimeHunter.P.PlayerReplicationInfo.PlayerName);
+            BroadcastMessage("|P7Game is active! [Round "$HideRound$"]");
+            BroadcastMessage("Prime Hunter: "$PrimeHunter.P.PlayerReplicationInfo.PlayerName);
 
             foreach AllActors(class'HunterInfo', h){ 
                 if(h.Hunting) {
-                    BroadcastMessage("[Hunt] |P2HUNTER: "$GetName(h.p)); 
+                    BroadcastMessage("|P2HUNTER: "$GetName(h.p)); 
                     hunters++;
                 } else {
-                    BroadcastMessage("[Hunt] |P4HIDER: "$GetName(h.p)); 
+                    BroadcastMessage("|P4HIDER: "$GetName(h.p)); 
                     hiders++;
                 }
                 
                 total++;
             }
-            BroadcastMessage("[Hunt]"@hunters@"players are hunting,"@hiders@"are hiding, out of"@total@"total players.");
+            BroadcastMessage(hunters@"players are hunting,"@hiders@"are hiding, out of"@total@"total players.");
 
         } else {
             pp.ClientMessage("No game currently running. Use `mutate hunt.start` to begin.");
@@ -340,6 +353,8 @@ function Mutate (String S, PlayerPawn PP){
     
     if(S ~= "hunt.end" && bHSOn && DeusExPlayer(PP).bAdmin) {
         bEndless = False;
+        PlayToEveryone(GameOverSnd);
+        BroadcastMessage("|P2The hunt was cancelled.");
         CleanupHunter();
     }
     
@@ -352,7 +367,7 @@ function Mutate (String S, PlayerPawn PP){
         marg = Right(S, Len(S) - 9);
         mval = Splitter(marg, " ", 0);
         mkey = Splitter(marg, " ", 1);
-        PP.ClientMessage("Setting "$mkey$" = "$mval);
+        BroadcastMessage("Hunters setting changed: "$mkey$" = "$mval);
         SetPropertyText(mkey, mval);
         SaveConfig();
     }
@@ -495,8 +510,11 @@ defaultproperties
     HunterCatchSnd=Sound'h_confirmed'
     PlayerCaughtSnd=Sound'h_caught'
     HunterErrorSnd=Sound'h_errored'
+    GameOverSnd=Sound'h_gameover'
     HunterLightType=LT_Steady
     HunterLightBrightness=64
     HunterLightRadius=8
     bLighting=True
+    bTimeLimit=False
+    TimeLimit=600
 }
