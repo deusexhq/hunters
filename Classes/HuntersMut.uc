@@ -30,6 +30,7 @@ var() config int HardModeDamage;
 var() config int TimeBetweenRounds; //How long do we wait between endless rounds before starting a new one
 var() config int TimeToHide; //How long do players have to hide before the hunter is let loose.
 var() config int OutputMod; //Used to check wether player info should be displayed
+var() config int TimeLimitReminder; //Seperate delay for when time remaining should be shown in speedrun mode
 var() config bool bLighting; //Highlight hunters with a light effect?
 var() config bool bPlaySounds; //Use sound effects?
 
@@ -281,7 +282,7 @@ function Timer(){
         if(bHSOn){
             Loops++;
             timeRemaining = TimeLimit - Loops;
-            if(bTimeLimit && Loops % 30 == 0) BroadcastMessage("|P2"$timeRemaining$" seconds remaining for this hunt.");
+            if(bTimeLimit && Loops % TimeLimitReminder == 0) BroadcastMessage("|P2"$timeRemaining$" seconds remaining for this hunt.");
             if(bTimeLimit && Loops > TimeLimit) {
                 BroadcastMessage("|P2[Hunt] Hunter failed to find everyone. Game over.");
                 CleanupHunter();
@@ -294,7 +295,7 @@ function Timer(){
 
 function Mutate (String S, PlayerPawn PP){
     local HunterInfo h;
-    local int hunters, hiders, total;
+    local int hunters, hiders, total, timeRemaining;
     local string marg, mkey, mval;
     
     //Keep the mutator chain linked
@@ -321,6 +322,10 @@ function Mutate (String S, PlayerPawn PP){
                 
                 total++;
             }
+            if(bTimeLimit) {
+                timeRemaining = TimeLimit - Loops;
+                BroadcastMessage("|P2"$timeRemaining$" seconds remaining for this hunt.");
+            }
             BroadcastMessage(hunters@"players are hunting,"@hiders@"are hiding, out of"@total@"total players.");
 
         } else {
@@ -328,6 +333,7 @@ function Mutate (String S, PlayerPawn PP){
             BroadcastMessage("Time to hide: "$TimeToHide);
             BroadcastMessage("Time between rounds (E): "$TimeBetweenRounds);
             BroadcastMessage("Hard Mode: "$bHardMode);
+            BroadcastMessage("Speedrun Mode: "$bTimeLimit$" ("$TimeLimit$"s)");
             
         }
     }
@@ -367,7 +373,7 @@ function Mutate (String S, PlayerPawn PP){
         marg = Right(S, Len(S) - 9);
         mval = Splitter(marg, " ", 0);
         mkey = Splitter(marg, " ", 1);
-        BroadcastMessage("Hunters setting changed: "$mkey$" = "$mval);
+        BroadcastMessage("|P7Hunters setting changed by "$PP.PlayerReplicationInfo.PlayerName$": "$mkey$" = "$mval);
         SetPropertyText(mkey, mval);
         SaveConfig();
     }
@@ -503,6 +509,7 @@ defaultproperties
     TimeToHide=60
     TimeBetweenRounds=5
     OutputMod=30
+    TimeLimitReminder=30
     bPlaySounds=True
     HardModeDamage=10
     HuntBeginSnd=Sound'h_begin'
