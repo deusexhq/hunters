@@ -51,7 +51,7 @@ function ScopeToggle(){
 function ProcessTraceHit(Actor Other, Vector HitLocation, Vector HitNormal, Vector X, Vector Y, Vector Z){
     local HuntersMut hm;
     local HunterInfo inf;
-    local DeusExPlayer me, them;
+    local DeusExPlayer me, them, allPlayers;
     local bool bGood;
     
     bGood = False;
@@ -78,6 +78,19 @@ function ProcessTraceHit(Actor Other, Vector HitLocation, Vector HitNormal, Vect
             if(WorldMutator.IsOpenDX()){
                 them.SetPropertyText("TeamName", "Hunters");
                 them.PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "Hunters");
+            }
+            
+            if(WorldMutator.bHuntCamera){
+                foreach AllActors(class'DeusExPlayer', allPlayers){
+                    if(allPlayers != me && allPlayers != them){
+                        allPlayers.ClientMessage("|P7Camera will switch to "$them.PlayerReplicationInfo.PlayerName$"\'s location shortly...");
+                    }
+                }
+                
+                WorldMutator.TimeToHookCams = WorldMutator.Loops + 3;
+                WorldMutator.bHookingCams = True;
+                WorldMutator.LastCaughtPlayer = them;
+                WorldMutator.LastCatchPlayer = me;
             }
         }
     }

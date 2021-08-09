@@ -1,6 +1,8 @@
 class HunterInfo extends actor;
 
 var DeusExPlayer P;
+var string OwnerName;
+
 var bool Hunting;
 var bool PrimeHunter;
 var HuntersMut WorldMutator;
@@ -9,11 +11,14 @@ var Beam HuntLight;
 
 function Tick(float deltatime){
     local vector pos;
-    if(P == None){
+    if(P == None || P.isInState('Spectating')){
         HuntLight.Destroy();
         Destroy();
+        BroadcastMessage("|P2"$OwnerName$" has evaded the hunt.");
         return;
     }
+    
+    if(OwnerName == "A player" && P != None) OwnerName = P.PlayerReplicationInfo.PlayerName;
     
     if(HuntLight != None){
         pos = P.Location + vect(0,0,1)*P.BaseEyeHeight + vect(1,1,0)*vector(P.Rotation)*P.CollisionRadius*1.5;
@@ -42,4 +47,5 @@ function DeleteLight(){
 defaultproperties
 {
     bHidden=True
+    OwnerName="A player"
 }

@@ -18,15 +18,21 @@ var int Loops; //How many times has the round timer looped, can be used to measu
 var bool bEndless; //Does a new round begin right after the last one ended automatically?
 var bool bWaitingNewRound; //Are we currently between two endless rounds?
 var bool bFinalRound; //Have we designated that Endless will end after this round?
+var bool bCamerasHooked; //Have cameras been hooked?
+var int TimeToReleaseCams; //Once Loops hits this value, release player cameras
+var bool bHookingCams; //Are we waiting to hook cameras
+var int TimeToHookCams; //Delay to hook the cameras
+var DeusExPlayer LastCaughtPlayer;
+var DeusExPlayer LastCatchPlayer;
 
 var() config bool bDebug;
 var() config bool bHideWeapons; //Hides weapons in the map when game is active
 var() config bool bUnlockDoors; //Unlocks all doors in the map
 var() config bool bGodMode; //No damage for players while game is active
 var() config bool bHardMode; //Limited number of attempts by the hunters
-var() config bool bTimeLimit;
-var() config int TimeLimit;
-var() config int HardModeDamage;
+var() config bool bTimeLimit; //Are we in speedrun mode?
+var() config int TimeLimit; //The time limit in seconds
+var() config int HardModeDamage; //How much damage does hard mode do when you fail a guess
 var() config int TimeBetweenRounds; //How long do we wait between endless rounds before starting a new one
 var() config int TimeToHide; //How long do players have to hide before the hunter is let loose.
 var() config int OutputMod; //Used to check wether player info should be displayed
@@ -34,6 +40,11 @@ var() config int TimeLimitReminder; //Seperate delay for when time remaining sho
 var() config bool bLighting; //Highlight hunters with a light effect?
 var() config bool bPlaySounds; //Use sound effects?
 
+//Camera
+var() config bool bHuntCamera;
+var() config int HuntCameraTime;
+
+//Lighting
 var() config ELightType HunterLightType;
 var() config ELightEffect HunterLightEffect;
 var() config byte HunterLightRadius;
@@ -41,6 +52,7 @@ var() config byte HunterLightBrightness;
 var() config byte HunterLightSaturation;
 var() config byte HunterLightHue;
 
+//Sounds
 var() config sound HuntBeginSnd; //begin
 var() config sound HuntRoundStartSnd; //huntison
 var() config sound HunterCatchSnd; //confirmed
@@ -189,6 +201,7 @@ function CleanupHunter(){
             DXP.PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "");
         }
         if(bLighting) LightOff(dxp);
+        bHidden=False;
     }
     
     foreach allactors(class'WeaponHunter',PGS) PGS.Destroy();
@@ -281,6 +294,24 @@ function Timer(){
         // IF the game didn't end from the previous checks, schedule the next loop
         if(bHSOn){
             Loops++;
+            
+            
+            if(bHuntCamera && bHookingCams && Loops >= TimeToHookCams){
+                bHookingCams = False;
+                bCamerasHooked = True;
+                TimeToReleaseCams = HuntCameraTime + Loops;
+                foreach allactors(class'DeusExPlayer',DXP) {
+                    if(!DXP.isinState('Spectating') && DXP != LastCaughtPlayer && DXP != LastCatchPlayer) {
+                        LockPlayerCam(DXP, LastCaughtPlayer);                        
+                    }
+                }
+                
+            }
+            
+            if(bHuntCamera && bCamerasHooked && Loops >= TimeToReleaseCams){
+                UnlockPlayersCam();
+            }
+            
             timeRemaining = TimeLimit - Loops;
             if(bTimeLimit && Loops % TimeLimitReminder == 0) BroadcastMessage("|P2"$timeRemaining$" seconds remaining for this hunt.");
             if(bTimeLimit && Loops > TimeLimit) {
@@ -297,13 +328,14 @@ function Mutate (String S, PlayerPawn PP){
     local HunterInfo h;
     local int hunters, hiders, total, timeRemaining;
     local string marg, mkey, mval;
+    local DeusExPlayer DXP;
     
     //Keep the mutator chain linked
     Super.Mutate (S, PP);
     
     
     if(S ~= "hunt.help") {
-        PP.ClientMessage("Commands: hunt, hunt.start, hunt.random, hunt.endless, hunt.end, hunt.set <config key> <config value>, hunt.reset");
+        PP.ClientMessage("Commands: hunt, hunt.start, hunt.random, hunt.endless, hunt.end, hunt.ready, hunt.set <config key> <config value>, hunt.reset");
     }
     
     if(S ~= "hunt") {
@@ -343,6 +375,21 @@ function Mutate (String S, PlayerPawn PP){
         bHSOn=True;
 
         BeginHunter(DeusExPlayer(PP));
+    }
+    
+    if(S ~= "hunt.ready" && DeusExPlayer(PP) == PrimeHunter.P && bHidePhase){
+        PlayToEveryone(HuntRoundStartSnd);
+        // If we're in hide phase, switch to main phase
+        BroadcastMessage("|P2[Hunt] The hunt is on.");
+        bHidePhase=False;
+        GiveHunterWeapon(PrimeHunter.P);
+        foreach allactors(class'DeusExPlayer',DXP) {
+            if(!DXP.isinState('Spectating')) {
+                DXP.bHidden=False;
+            }
+        }
+        //Start the timer loop for displaying player info
+        SetTimer(1, False);
     }
     
     if(S ~= "hunt.random" && !bHSOn  ) {
@@ -502,6 +549,28 @@ function GiveHunterWeapon(DeusExPlayer p){
     inv.Destroy();
 }
 
+function LockPlayersCam(Actor Other){
+    local DeusExPlayer DXP;
+    foreach AllActors(class'DeusExPlayer', DXP) LockPlayerCam(DXP, Other);
+}
+
+function UnlockPlayersCam(){
+    local DeusExPlayer DXP;
+    foreach AllActors(class'DeusExPlayer', DXP) UnlockPlayerCam(DXP);
+}
+
+function LockPlayerCam(deusexplayer dxp, Actor Other){
+    dxp.bBehindView = True;
+    dxp.ViewTarget = Other;
+    if(DeusExPlayer(Other) != None) dxp.ClientMessage("|P7Viewing from "$DeusExPlayer(Other).PlayerReplicationInfo.PlayerName$"\' perspective.");
+}
+
+function UnLockPlayerCam(deusexplayer dxp){
+    dxp.bBehindView = False;
+    dxp.ViewTarget = None;
+    dxp.ClientMessage("|P7Reverted to own camera.");
+}
+
 defaultproperties
 {
     bHideWeapons=True
@@ -524,4 +593,6 @@ defaultproperties
     bLighting=True
     bTimeLimit=False
     TimeLimit=600
+    bHuntCamera=True
+    HuntCameraTime=7
 }
