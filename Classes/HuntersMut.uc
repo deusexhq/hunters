@@ -310,6 +310,7 @@ function Timer(){
             
             if(bHuntCamera && bCamerasHooked && Loops >= TimeToReleaseCams){
                 UnlockPlayersCam();
+                bCamerasHooked=False;
             }
             
             timeRemaining = TimeLimit - Loops;
