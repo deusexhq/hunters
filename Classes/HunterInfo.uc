@@ -11,6 +11,9 @@ var Beam HuntLight;
 
 function Tick(float deltatime){
     local vector pos;
+    if(P != None && OwnerName != P.PlayerReplicationInfo.PlayerName) 
+        OwnerName = P.PlayerReplicationInfo.PlayerName;
+        
     if(P == None || P.isInState('Spectating')){
         HuntLight.Destroy();
         Destroy();
@@ -18,7 +21,7 @@ function Tick(float deltatime){
         return;
     }
     
-    if(OwnerName == "A player" && P != None) OwnerName = P.PlayerReplicationInfo.PlayerName;
+
     
     if(HuntLight != None){
         pos = P.Location + vect(0,0,1)*P.BaseEyeHeight + vect(1,1,0)*vector(P.Rotation)*P.CollisionRadius*1.5;

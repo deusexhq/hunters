@@ -295,24 +295,6 @@ function Timer(){
         if(bHSOn){
             Loops++;
             
-            
-            if(bHuntCamera && bHookingCams && Loops >= TimeToHookCams){
-                bHookingCams = False;
-                bCamerasHooked = True;
-                TimeToReleaseCams = HuntCameraTime + Loops;
-                foreach allactors(class'DeusExPlayer',DXP) {
-                    if(!DXP.isinState('Spectating') && DXP != LastCaughtPlayer && DXP != LastCatchPlayer) {
-                        LockPlayerCam(DXP, LastCaughtPlayer);                        
-                    }
-                }
-                
-            }
-            
-            if(bHuntCamera && bCamerasHooked && Loops >= TimeToReleaseCams){
-                UnlockPlayersCam();
-                bCamerasHooked=False;
-            }
-            
             timeRemaining = TimeLimit - Loops;
             if(bTimeLimit && Loops % TimeLimitReminder == 0) BroadcastMessage("|P2"$timeRemaining$" seconds remaining for this hunt.");
             if(bTimeLimit && Loops > TimeLimit) {
@@ -322,6 +304,23 @@ function Timer(){
             } else SetTimer(1, False);
         }
 
+    }
+    
+    if(bHuntCamera && bHookingCams && Loops >= TimeToHookCams){
+        bHookingCams = False;
+        bCamerasHooked = True;
+        TimeToReleaseCams = HuntCameraTime + Loops;
+        foreach allactors(class'DeusExPlayer',DXP) {
+            if(!DXP.isinState('Spectating') && DXP != LastCaughtPlayer && DXP != LastCatchPlayer) {
+                LockPlayerCam(DXP, LastCaughtPlayer);                        
+            }
+        }
+        
+    }
+    
+    if(bHuntCamera && bCamerasHooked && Loops >= TimeToReleaseCams){
+        UnlockPlayersCam();
+        bCamerasHooked=False;
     }
 }
 
@@ -336,7 +335,7 @@ function Mutate (String S, PlayerPawn PP){
     
     
     if(S ~= "hunt.help") {
-        PP.ClientMessage("Commands: hunt, hunt.start, hunt.random, hunt.endless, hunt.end, hunt.ready, hunt.set <config key> <config value>, hunt.reset");
+        PP.ClientMessage("Commands: hunt, hunt.start, hunt.random, hunt.endless, hunt.end, hunt.ready, hunt.retire, hunt.join, hunt.reveal, hunt.set <config key> <config value>, hunt.reset");
     }
     
     if(S ~= "hunt") {
@@ -391,6 +390,33 @@ function Mutate (String S, PlayerPawn PP){
         }
         //Start the timer loop for displaying player info
         SetTimer(1, False);
+    }
+    
+    if(S ~= "hunt.reveal" && bHSOn){
+        if(hasHunterPlayerInfo(DeusExPlayer(PP)) && !GetHunterPlayerInfo(DeusExPlayer(PP)).Hunting){
+            GetHunterPlayerInfo(DeusExPlayer(PP)).Hunting=True;
+            BroadcastMessage("|P3"$DeusExPlayer(PP).PlayerReplicationInfo.PlayerName$" has chosen to join the Hunters.");
+        } else {
+            DeusExPlayer(PP).ClientMessage("You can\'t do that right now.");
+        }
+    }
+    
+    if(S ~= "hunt.join" && bHSOn){
+        if(!hasHunterPlayerInfo(DeusExPlayer(PP))){
+            CreatePlayerHunterInfo(DeusExPlayer(PP));
+            BroadcastMessage("|P3"$DeusExPlayer(PP).PlayerReplicationInfo.PlayerName$" has joined the hunt.");
+        } else {
+            DeusExPlayer(PP).ClientMessage("You can\'t do that right now.");
+        }
+    }
+    
+    if(S ~= "hunt.retire" && bHSOn){
+        if(hasHunterPlayerInfo(DeusExPlayer(PP))){
+            GetHunterPlayerInfo(DeusExPlayer(PP)).Destroy();
+            BroadcastMessage("|P3"$DeusExPlayer(PP).PlayerReplicationInfo.PlayerName$" has retired from the hunt.");
+        } else {
+            DeusExPlayer(PP).ClientMessage("You can\'t do that right now.");
+        }
     }
     
     if(S ~= "hunt.random" && !bHSOn  ) {
@@ -569,7 +595,7 @@ function LockPlayerCam(deusexplayer dxp, Actor Other){
 function UnLockPlayerCam(deusexplayer dxp){
     dxp.bBehindView = False;
     dxp.ViewTarget = None;
-    dxp.ClientMessage("|P7Reverted to own camera.");
+    if(!DXP.isinState('Spectating') && DXP != LastCaughtPlayer && DXP != LastCatchPlayer) dxp.ClientMessage("|P7Reverted to own camera.");
 }
 
 defaultproperties

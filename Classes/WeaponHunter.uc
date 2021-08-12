@@ -65,7 +65,7 @@ function ProcessTraceHit(Actor Other, Vector HitLocation, Vector HitNormal, Vect
         them = DeusExPlayer(Other);
         inf = WorldMutator.GetHunterPlayerInfo(them);
         if(inf.Hunting){
-            Me.ClientMessage("|p2This player is a hunter!");
+            Me.ClientMessage("|p2"$Them.PlayerReplicationInfo.PlayerName$" is a hunter!");
         } else {
             inf.FoundBy = me;
             inf.Hunting = True;
@@ -82,7 +82,7 @@ function ProcessTraceHit(Actor Other, Vector HitLocation, Vector HitNormal, Vect
             
             if(WorldMutator.bHuntCamera){
                 foreach AllActors(class'DeusExPlayer', allPlayers){
-                    if(allPlayers != me && allPlayers != them){
+                    if(allPlayers != me && allPlayers != them && !allPlayers.isinState('Spectating') ){
                         allPlayers.ClientMessage("|P7Camera will switch to "$them.PlayerReplicationInfo.PlayerName$"\'s location shortly...");
                     }
                 }
