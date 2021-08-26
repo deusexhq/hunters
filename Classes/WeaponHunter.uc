@@ -46,6 +46,13 @@ Function LaserToggle(){
 }
 
 function ScopeToggle(){
+    local HunterInfo inf;
+    inf = WorldMutator.GetHunterPlayerInfo(DeusExPlayer(Owner));
+    if(inf.FoundBy != None){
+        DeusExPlayer(Owner).ClientMessage("You were caught be "$inf.FoundBy.PlayerReplicationInfo.PlayerName);
+    } else {
+        DeusExPlayer(Owner).ClientMessage("You were not caught by anyone.");
+    }
 }
 
 function ProcessTraceHit(Actor Other, Vector HitLocation, Vector HitNormal, Vector X, Vector Y, Vector Z){
@@ -78,6 +85,13 @@ function ProcessTraceHit(Actor Other, Vector HitLocation, Vector HitNormal, Vect
             if(WorldMutator.IsOpenDX()){
                 them.SetPropertyText("TeamName", "Hunters");
                 them.PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "Hunters");
+            }
+            
+            if(WorldMutator.ScorePerCatch != 0){
+                //Handle scoring
+                them.PlayerReplicationInfo.deaths += 1;
+                them.PlayerReplicationInfo.streak = 0;
+                me.PlayerReplicationInfo.Score += WorldMutator.ScorePerCatch;
             }
             
             if(WorldMutator.bHuntCamera){

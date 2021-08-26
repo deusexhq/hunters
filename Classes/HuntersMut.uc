@@ -22,8 +22,10 @@ var bool bCamerasHooked; //Have cameras been hooked?
 var int TimeToReleaseCams; //Once Loops hits this value, release player cameras
 var bool bHookingCams; //Are we waiting to hook cameras
 var int TimeToHookCams; //Delay to hook the cameras
+var bool bWaitingForPlayers; //if player count is too low, keep looping until there's enough
 var DeusExPlayer LastCaughtPlayer;
 var DeusExPlayer LastCatchPlayer;
+var DeusExPlayer WaitingPlayer;
 
 var() config bool bDebug;
 var() config bool bHideWeapons; //Hides weapons in the map when game is active
@@ -39,6 +41,12 @@ var() config int OutputMod; //Used to check wether player info should be display
 var() config int TimeLimitReminder; //Seperate delay for when time remaining should be shown in speedrun mode
 var() config bool bLighting; //Highlight hunters with a light effect?
 var() config bool bPlaySounds; //Use sound effects?
+var() config bool bCleanupMap; //Do cleanup to remove non-needed stuff
+var() config bool bAutoStart; //Start a new game when map starts
+var() config int WaitCheckTime; //Time to wait for checking new player count
+
+//Scoring
+var() config int ScorePerCatch, ScorePerRoundWin; //How much score does the player get per player caught, and per round win
 
 //Camera
 var() config bool bHuntCamera;
@@ -59,6 +67,28 @@ var() config sound HunterCatchSnd; //confirmed
 var() config sound PlayerCaughtSnd; //caught
 var() config sound HunterErrorSnd; //errored
 var() config sound GameOverSnd; //gameover
+
+function PostBeginPlay (){
+    Level.Game.BaseMutator.AddMutator (Self);
+    
+    //Making sure some defaults are set
+    bHSOn=False;
+    HideRound = 0;
+    Loops = 0;
+
+    if(bAutoStart){
+        //Autostart a round when the map loads
+        bHSOn=True;
+        
+        //If we're autostarting, we can safely assume that this means it should be endless mode, completely automated
+        bEndless=True;
+        
+        //Send straight in to the "wait for players" loop since we can safely assume
+        //that there are not enough players right after map loading, wait for joiners to filter in
+        bWaitingForPlayers=True;
+        SetTimer(WaitCheckTime, False);
+    }
+}
 
 function ModifyPlayer(Pawn Other){
     local DeusExPlayer P;
@@ -83,6 +113,14 @@ function BeginHunter(DeusExPlayer Seeker){
     local AutoTurretGun atg;
     local MissionScript ms;
 
+    if(Level.Game.GameReplicationInfo.NumPlayers < 2){
+        Seeker.ClientMessage("Sleeping until enough players are found...");
+        bWaitingForPlayers=True;
+        SetTimer(2, false);
+        WaitingPlayer = Seeker;
+        return;
+    }
+        
     //Defining our main character of the round
     PrimeHunter = CreatePlayerHunterInfo(Seeker);
     if(bLighting) LightUp(Seeker);
@@ -90,7 +128,8 @@ function BeginHunter(DeusExPlayer Seeker){
     Seeker.bHidden=False;
     HideRound++;
     bWaitingNewRound = False;
-    BroadcastMessage("[Hunt] |P2Hunters game has begun. [Round "$HideRound$"]");
+    
+    BroadcastMessage("[Hunt] |P2Hunters game, round "$HideRound$", has begun.");
     BroadcastMessage("[Hunt] "$Seeker.PlayerReplicationInfo.PlayerName$" is now a Hunter.");
     if(IsOpenDX()) PrimeHunter.P.ConsoleCommand("CreateTeam2 Hunters"); //If OpenDX is installed, set the hunter to a team to show in the scoreboard
 
@@ -101,48 +140,32 @@ function BeginHunter(DeusExPlayer Seeker){
     PlayToEveryone(HuntBeginSnd);
     
     //Map cleanup actions
-    foreach allactors(class'MissionScript',ms) {
-        ConsoleCommand("set MissionScript bstatic 0");
-        ms.bHidden = False;
-        ms.Destroy();
-    }
     
-    foreach allactors(class'Teleporter',tp) {
-        ConsoleCommand("set teleporter bstatic 0");
-        tp.bHidden = False;
-        tp.Destroy();
-    }
-    
-    foreach allactors(class'AutoTurret',at) {
-        at.Untrigger(Seeker, Seeker);
-        at.bDisabled = True;
-        at.bActive = False;
-    }
-      
-    foreach allactors(class'AutoTurretGun',atg) {
-        atg.bHidden = True;
-    }
-    
-    foreach allactors(class'SecurityCamera',cam) {
-        cam.Untrigger(Seeker, Seeker);
-        cam.bActive = False;
-    }
-    
-    foreach allactors(class'ComputerSecurity',sc) {
-        sc.bHidden = True;
-    }
-    
-    foreach allactors(class'DatalinkTrigger',dl) {
-        ConsoleCommand("set DatalinkTrigger bstatic 0");
-        dl.bHidden = False;
-        dl.Destroy();
-    }
-        
-    if(bHideWeapons){
-        foreach allactors(class'DeusExWeapon',W) {
-            W.bHidden = True;
-            if(W.Owner != None) w.Destroy();
+    if(bCleanupMap){
+        foreach allactors(class'MissionScript',ms) {
+            ConsoleCommand("set MissionScript bstatic 0"); ms.bHidden = False; ms.Destroy();
         }
+        
+        foreach allactors(class'Teleporter',tp) {
+            ConsoleCommand("set teleporter bstatic 0"); tp.bHidden = False; tp.Destroy();
+        }
+        
+        foreach allactors(class'AutoTurret',at) {
+            at.Untrigger(Seeker, Seeker); at.bDisabled = True; at.bActive = False;
+        }
+        
+        foreach allactors(class'AutoTurretGun',atg) { atg.bHidden = True; }
+        
+        foreach allactors(class'SecurityCamera',cam) { cam.Untrigger(Seeker, Seeker); cam.bActive = False; }
+        
+        foreach allactors(class'ComputerSecurity',sc) { sc.bHidden = True; }
+        
+        foreach allactors(class'DatalinkTrigger',dl) {
+            ConsoleCommand("set DatalinkTrigger bstatic 0"); dl.bHidden = False; dl.Destroy(); }
+    }
+
+    if(bHideWeapons){
+        foreach allactors(class'DeusExWeapon',W) { W.bHidden = True; if(W.Owner != None) w.Destroy(); }
     }
     
     if(bUnlockDoors){
@@ -154,13 +177,11 @@ function BeginHunter(DeusExPlayer Seeker){
     
     foreach allactors(class'DeusExPlayer',DXP) {
         //If OpenDX is installed, turn off the IFF
-        if(IsOpenDX()){
-            DXP.SetPropertyText("HUDType", "HUD_Off");
-            
-        }
+        if(IsOpenDX()){ DXP.SetPropertyText("HUDType", "HUD_Off"); }
         
         if(!DXP.isinState('Spectating') && DXP != Seeker) {
             DXP.ClientMessage("You are hiding, hide somewhere that Hunter "$GetName(Seeker)$" may not find you!");
+            
             //Create the info for the player to store their data
             h = CreatePlayerHunterInfo(DXP);
             h.Hunting = False;
@@ -181,6 +202,8 @@ function CleanupHunter(){
     local HunterInfo inf;
     local DeusExPlayer DXP;
     local DeusExWeapon w;
+    
+    WaitingPlayer = None;
     
     // Loop time
     // Hooking the game end function to redirect to starting a new round if we're in endless mode
@@ -208,15 +231,9 @@ function CleanupHunter(){
     foreach allactors(class'HunterInfo',inf) inf.Destroy();
     foreach allactors(class'DeusExWeapon',W) W.bHidden = False;
     
+    
 }
 
-function PostBeginPlay (){
-    Level.Game.BaseMutator.AddMutator (Self);
-    bHSOn=False;
-    HideRound = 0;
-    Loops = 0;
-    //super.PostBeginPlay();
-}
 
 // OpenDX check
 // Allows for checking if the mod is running, without requiring it as a dependency, so THIS mod can integrate with it, but also work without it
@@ -243,8 +260,24 @@ function Timer(){
     // Do nothing if game is not running
     if(!bHSOn && !bWaitingNewRound) return;
     
+    if(bWaitingForPlayers){
+        if(Level.Game.GameReplicationInfo.NumPlayers < 2){
+            BroadcastMessage("Waiting for players before round starts...");
+            SetTimer(WaitCheckTime, False);
+            return;
+        } else {
+            bWaitingForPlayers=False;
+            if(WaitingPlayer == None) 
+                BeginHunter(GetRandomPlayer());
+            else 
+                BeginHunter(WaitingPlayer);
+            return;
+        }
+
+    }
     // If we're in endless and waiting for a new round, start the next round
     if(bWaitingNewRound){
+
         BroadcastMessage("|P2[Hunt] A new round begins!");
         BeginHunter(GetRandomPlayer());
     } else if(bHidePhase){
@@ -284,11 +317,23 @@ function Timer(){
             CleanupHunter();
         }
         
-        //If all hiders have been fond, end the game.
+        //If all hiders have been found, end the game.
         if(hiders == 0){
             BroadcastMessage("|P2[Hunt] Everyone has been found! Game over.");
+            if(ScorePerRoundWin != 0) PrimeHunter.P.PlayerReplicationInfo.Score += ScorePerRoundWin;
             PlayToEveryone(GameOverSnd);
-            CleanupHunter();
+            
+            if ( DeathMatchGame(Level.Game) != None ){
+                DeathMatchGame(Level.Game).CheckVictoryConditions(LastCatchPlayer, LastCaughtPlayer, ". The hunt is over.");
+            } else { 
+                CleanupHunter(); 
+            }
+            
+            if ( TeamDMGame(Level.Game) != None ){
+                TeamDMGame(Level.Game).CheckVictoryConditions(LastCatchPlayer, LastCaughtPlayer, ". The hunt is over.");
+            } else { 
+                CleanupHunter(); 
+            }
         }
         
         // IF the game didn't end from the previous checks, schedule the next loop
@@ -301,6 +346,26 @@ function Timer(){
                 BroadcastMessage("|P2[Hunt] Hunter failed to find everyone. Game over.");
                 CleanupHunter();
                 PlayToEveryone(GameOverSnd);
+                if(ScorePerRoundWin != 0) {
+                    foreach allactors(class'DeusExPlayer',DXP) {
+                        if(!DXP.isinState('Spectating') && DXP != PrimeHunter.P) {
+                            DXP.PlayerReplicationInfo.Score += ScorePerRoundWin;                     
+                        }
+                    }
+                    PrimeHunter.P.PlayerReplicationInfo.Streak = 0;
+                }
+                
+            if ( DeathMatchGame(Level.Game) != None ){
+                DeathMatchGame(Level.Game).CheckVictoryConditions(LastCatchPlayer, LastCaughtPlayer, ". The hunt is over.");
+            } else { 
+                CleanupHunter(); 
+            }
+            
+            if ( TeamDMGame(Level.Game) != None ){
+                TeamDMGame(Level.Game).CheckVictoryConditions(LastCatchPlayer, LastCaughtPlayer, ". The hunt is over.");
+            } else { 
+                CleanupHunter(); 
+            }
             } else SetTimer(1, False);
         }
 
@@ -622,4 +687,8 @@ defaultproperties
     TimeLimit=600
     bHuntCamera=True
     HuntCameraTime=7
+    WaitCheckTime=10
+    ScorePerCatch=1
+    ScorePerRoundWin=3
+    bCleanupMap=True
 }
