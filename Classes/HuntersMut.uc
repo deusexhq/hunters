@@ -23,6 +23,7 @@ var int TimeToReleaseCams; //Once Loops hits this value, release player cameras
 var bool bHookingCams; //Are we waiting to hook cameras
 var int TimeToHookCams; //Delay to hook the cameras
 var bool bWaitingForPlayers; //if player count is too low, keep looping until there's enough
+var bool bGameEnded; //A nuclear DO NOTHING value, used when the games over and processing should just stop
 var DeusExPlayer LastCaughtPlayer;
 var DeusExPlayer LastCatchPlayer;
 var DeusExPlayer WaitingPlayer;
@@ -47,7 +48,9 @@ var() config int WaitCheckTime; //Time to wait for checking new player count
 
 //Scoring
 var() config int ScorePerCatch, ScorePerRoundWin; //How much score does the player get per player caught, and per round win
-
+var() config int MaxRounds;
+var() config bool bRoundLimit;
+var() config bool bUseStandardVictoryCondition;
 //Camera
 var() config bool bHuntCamera;
 var() config int HuntCameraTime;
@@ -113,6 +116,7 @@ function BeginHunter(DeusExPlayer Seeker){
     local AutoTurretGun atg;
     local MissionScript ms;
 
+    //If there's not enough players, just wait until there is
     if(Level.Game.GameReplicationInfo.NumPlayers < 2){
         Seeker.ClientMessage("Sleeping until enough players are found...");
         bWaitingForPlayers=True;
@@ -140,7 +144,6 @@ function BeginHunter(DeusExPlayer Seeker){
     PlayToEveryone(HuntBeginSnd);
     
     //Map cleanup actions
-    
     if(bCleanupMap){
         foreach allactors(class'MissionScript',ms) {
             ConsoleCommand("set MissionScript bstatic 0"); ms.bHidden = False; ms.Destroy();
@@ -251,6 +254,31 @@ function bool IsOpenDX(){
         return false;
 }
 
+function bool CheckVictory(){
+    local Pawn winner;
+    if(bUseStandardVictoryCondition){
+        if ( DeathMatchGame(Level.Game) != None ){
+            DeathMatchGame(Level.Game).CheckVictoryConditions(LastCatchPlayer, LastCaughtPlayer, ". The hunt is over.");
+            bGameEnded=True;
+            return True;
+        } else { 
+            return False;
+        }
+    } else {
+        if(MaxRounds > 0 && HideRound >= MaxRounds){
+            if ( DeathMatchGame(Level.Game) != None ){
+                DeathMatchGame(Level.Game).GetWinningPlayer( winner );
+                DeathMatchGame(Level.Game).PlayerHasWon( winner, LastCatchPlayer, LastCaughtPlayer, ". The hunt is over." );
+                bGameEnded=True;
+                return True;
+            } else { 
+                return False;
+            }
+        } else return False;
+    }
+
+}
+
 function Timer(){
     local DeusExPlayer dxp;
     local HunterInfo h;
@@ -259,6 +287,7 @@ function Timer(){
     
     // Do nothing if game is not running
     if(!bHSOn && !bWaitingNewRound) return;
+    if(bGameEnded) return;
     
     if(bWaitingForPlayers){
         if(Level.Game.GameReplicationInfo.NumPlayers < 2){
@@ -323,15 +352,7 @@ function Timer(){
             if(ScorePerRoundWin != 0) PrimeHunter.P.PlayerReplicationInfo.Score += ScorePerRoundWin;
             PlayToEveryone(GameOverSnd);
             
-            if ( DeathMatchGame(Level.Game) != None ){
-                DeathMatchGame(Level.Game).CheckVictoryConditions(LastCatchPlayer, LastCaughtPlayer, ". The hunt is over.");
-            } else { 
-                CleanupHunter(); 
-            }
-            
-            if ( TeamDMGame(Level.Game) != None ){
-                TeamDMGame(Level.Game).CheckVictoryConditions(LastCatchPlayer, LastCaughtPlayer, ". The hunt is over.");
-            } else { 
+            if ( !CheckVictory() ){
                 CleanupHunter(); 
             }
         }
@@ -355,17 +376,9 @@ function Timer(){
                     PrimeHunter.P.PlayerReplicationInfo.Streak = 0;
                 }
                 
-            if ( DeathMatchGame(Level.Game) != None ){
-                DeathMatchGame(Level.Game).CheckVictoryConditions(LastCatchPlayer, LastCaughtPlayer, ". The hunt is over.");
-            } else { 
-                CleanupHunter(); 
-            }
-            
-            if ( TeamDMGame(Level.Game) != None ){
-                TeamDMGame(Level.Game).CheckVictoryConditions(LastCatchPlayer, LastCaughtPlayer, ". The hunt is over.");
-            } else { 
-                CleanupHunter(); 
-            }
+                if ( !CheckVictory() ){
+                    CleanupHunter(); 
+                }
             } else SetTimer(1, False);
         }
 
@@ -691,4 +704,5 @@ defaultproperties
     ScorePerCatch=1
     ScorePerRoundWin=3
     bCleanupMap=True
+    MaxRounds=3
 }
