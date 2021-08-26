@@ -276,7 +276,7 @@ function bool CheckVictory(){
             }
         } else return False;
     }
-
+    return False;
 }
 
 function Timer(){
