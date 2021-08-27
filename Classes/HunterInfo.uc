@@ -8,16 +8,27 @@ var bool PrimeHunter;
 var HuntersMut WorldMutator;
 var DeusExPlayer FoundBy;
 var Beam HuntLight;
+var int DeadSecs;
+
+function Timer(){
+    if(P.IsInState('Dying') || P.Health <= 0){
+        DeadSecs++;
+    } else DeadSecs = 0;
+    
+    if(DeadSecs >= 10){
+        BroadcastMessage("|P2"$OwnerName$" has died of old age and has been removed from the game.");
+        HuntLight.Destroy();
+        Destroy();
+    }
+}
 
 function Tick(float deltatime){
     local vector pos;
-    if(P != None && OwnerName != P.PlayerReplicationInfo.PlayerName) 
-        OwnerName = P.PlayerReplicationInfo.PlayerName;
-        
+
     if(P == None || P.isInState('Spectating')){
+        BroadcastMessage("|P2"$OwnerName$" has evaded the hunt.");
         HuntLight.Destroy();
         Destroy();
-        BroadcastMessage("|P2"$OwnerName$" has evaded the hunt.");
         return;
     }
     

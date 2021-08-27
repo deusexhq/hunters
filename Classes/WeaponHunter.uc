@@ -109,6 +109,10 @@ function ProcessTraceHit(Actor Other, Vector HitLocation, Vector HitNormal, Vect
         }
     }
     
+    if(!WorldMutator.hasHunterPlayerInfo(DeusExPlayer(Other))){
+        me.ClientMessage("That target is not a player.");
+    }
+        
     if(!bGood && WorldMutator.bHardMode){
         if(WorldMutator.bPlaySounds) me.ClientPlaySound(WorldMutator.HunterErrorSnd);
         DeusExPlayer(Owner).ClientMessage("|P2That was a bad guess!");

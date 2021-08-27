@@ -27,6 +27,7 @@ var bool bGameEnded; //A nuclear DO NOTHING value, used when the games over and 
 var DeusExPlayer LastCaughtPlayer;
 var DeusExPlayer LastCatchPlayer;
 var DeusExPlayer WaitingPlayer;
+var CameraTimer CamTimer;
 
 var() config bool bDebug;
 var() config bool bHideWeapons; //Hides weapons in the map when game is active
@@ -91,17 +92,41 @@ function PostBeginPlay (){
         bWaitingForPlayers=True;
         SetTimer(WaitCheckTime, False);
     }
+    CamTimer = Spawn(class'CameraTimer');
+    CamTimer.SetTimer(1, true);
+    CamTimer.WorldMutator = Self;
 }
 
 function ModifyPlayer(Pawn Other){
     local DeusExPlayer P;
+    
     P = DeusExPlayer(Other);
-
+    Super.ModifyPlayer(Other);
+    
+    if(!hasHunterPlayerInfo(P) && bHSOn && !bWaitingNewRound && !bHidePhase && !bWaitingForPlayers){
+        CreatePlayerHunterInfo(P);
+        if(IsOpenDX()){
+            P.SetPropertyText("TeamName", "Hiding");
+            P.PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "Hiding");
+        }
+        BroadcastMessage("|P3"$P.PlayerReplicationInfo.PlayerName$" has joined the hunt.");
+    } 
     // Give players on the hunter team the weapon when they respawn
     if(hasHunterPlayerInfo(P) && GetHunterPlayerInfo(P).Hunting) GiveHunterWeapon(P);
-    Super.ModifyPlayer(Other);
+    
 }
 
+function int RealPlayers(){
+    local DeusExPlayer p;
+    local int i;
+    
+    foreach AllActors(class'DeusExPlayer', p){
+        if(!P.isInState('Spectating') && P.health > 0 && !P.isInState('Dying')){
+            i++;
+        }
+    }
+    return i;
+}
 function BeginHunter(DeusExPlayer Seeker){
     // God everyone -- scratch that, use a takedamage mutator hook to disable damage against players while HS is on
     local DeusExPlayer DXP;
@@ -116,8 +141,9 @@ function BeginHunter(DeusExPlayer Seeker){
     local AutoTurretGun atg;
     local MissionScript ms;
 
+    UnlockPlayersCam();
     //If there's not enough players, just wait until there is
-    if(Level.Game.GameReplicationInfo.NumPlayers < 2){
+    if(RealPlayers() < 2){
         Seeker.ClientMessage("Sleeping until enough players are found...");
         bWaitingForPlayers=True;
         SetTimer(2, false);
@@ -132,6 +158,7 @@ function BeginHunter(DeusExPlayer Seeker){
     Seeker.bHidden=False;
     HideRound++;
     bWaitingNewRound = False;
+    CamTimer.Loops = 0;
     
     BroadcastMessage("[Hunt] |P2Hunters game, round "$HideRound$", has begun.");
     BroadcastMessage("[Hunt] "$Seeker.PlayerReplicationInfo.PlayerName$" is now a Hunter.");
@@ -186,15 +213,19 @@ function BeginHunter(DeusExPlayer Seeker){
             DXP.ClientMessage("You are hiding, hide somewhere that Hunter "$GetName(Seeker)$" may not find you!");
             
             //Create the info for the player to store their data
-            h = CreatePlayerHunterInfo(DXP);
-            h.Hunting = False;
-            DXP.bHidden=True;
-            
-            // If OpenDX is installed, set their ODXDM Team Name
-            if(IsOpenDX()){
-                DXP.SetPropertyText("TeamName", "Hiding");
-                DXP.PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "Hiding");
+            if(!hasHunterPlayerInfo(DXP)) {
+                h = CreatePlayerHunterInfo(DXP);
+                h.Hunting = False;
+                
+                
+                // If OpenDX is installed, set their ODXDM Team Name
+                if(IsOpenDX()){
+                    DXP.SetPropertyText("TeamName", "Hiding");
+                    DXP.PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "Hiding");
+                }
             }
+            DXP.bHidden=True;
+
         }
     }
     bHSOn = True;
@@ -290,7 +321,7 @@ function Timer(){
     if(bGameEnded) return;
     
     if(bWaitingForPlayers){
-        if(Level.Game.GameReplicationInfo.NumPlayers < 2){
+        if(RealPlayers() < 2){
             BroadcastMessage("Waiting for players before round starts...");
             SetTimer(WaitCheckTime, False);
             return;
@@ -306,7 +337,7 @@ function Timer(){
     }
     // If we're in endless and waiting for a new round, start the next round
     if(bWaitingNewRound){
-
+        UnlockPlayersCam();
         BroadcastMessage("|P2[Hunt] A new round begins!");
         BeginHunter(GetRandomPlayer());
     } else if(bHidePhase){
@@ -384,22 +415,7 @@ function Timer(){
 
     }
     
-    if(bHuntCamera && bHookingCams && Loops >= TimeToHookCams){
-        bHookingCams = False;
-        bCamerasHooked = True;
-        TimeToReleaseCams = HuntCameraTime + Loops;
-        foreach allactors(class'DeusExPlayer',DXP) {
-            if(!DXP.isinState('Spectating') && DXP != LastCaughtPlayer && DXP != LastCatchPlayer) {
-                LockPlayerCam(DXP, LastCaughtPlayer);                        
-            }
-        }
-        
-    }
-    
-    if(bHuntCamera && bCamerasHooked && Loops >= TimeToReleaseCams){
-        UnlockPlayersCam();
-        bCamerasHooked=False;
-    }
+
 }
 
 function Mutate (String S, PlayerPawn PP){
@@ -482,6 +498,10 @@ function Mutate (String S, PlayerPawn PP){
     if(S ~= "hunt.join" && bHSOn){
         if(!hasHunterPlayerInfo(DeusExPlayer(PP))){
             CreatePlayerHunterInfo(DeusExPlayer(PP));
+            if(IsOpenDX()){
+                DeusExPlayer(PP).SetPropertyText("TeamName", "Hiding");
+                DeusExPlayer(PP).PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "Hiding");
+            }
             BroadcastMessage("|P3"$DeusExPlayer(PP).PlayerReplicationInfo.PlayerName$" has joined the hunt.");
         } else {
             DeusExPlayer(PP).ClientMessage("You can\'t do that right now.");
@@ -631,6 +651,8 @@ function HunterInfo CreateHunterInfo(int id){
     h = Spawn(class'HunterInfo');
     h.P = getPlayer(id);
     h.WorldMutator = self;
+    h.SetTimer(1, True);
+    h.OwnerName = h.P.PlayerReplicationInfo.PlayerName;
     return h;
 }
 
@@ -639,6 +661,8 @@ function HunterInfo CreatePlayerHunterInfo(DeusExPlayer p){
     h = Spawn(class'HunterInfo');
     h.P = p;
     h.WorldMutator = self;
+    h.SetTimer(1, True);
+    h.OwnerName = h.P.PlayerReplicationInfo.PlayerName;
     return h;
 }
 function GiveHunterWeaponID(int id){
