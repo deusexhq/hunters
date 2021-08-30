@@ -46,7 +46,7 @@ var() config bool bPlaySounds; //Use sound effects?
 var() config bool bCleanupMap; //Do cleanup to remove non-needed stuff
 var() config bool bAutoStart; //Start a new game when map starts
 var() config int WaitCheckTime; //Time to wait for checking new player count
-
+var() config bool bEnableLobbySystem; //TC_ODX: Enable system to force players in to spectate when they join late
 //Scoring
 var() config int ScorePerCatch, ScorePerRoundWin; //How much score does the player get per player caught, and per round win
 var() config int MaxRounds;
@@ -95,22 +95,41 @@ function PostBeginPlay (){
     CamTimer = Spawn(class'CameraTimer');
     CamTimer.SetTimer(1, true);
     CamTimer.WorldMutator = Self;
+    
+    if(bEnableLobbySystem && !isOpenDX()){
+        bEnableLobbySystem=False;
+        SaveConfig();
+        log("--------------", 'Hunters');
+        log("ERROR: Lobby system has been disabled. It is not supported in this gametype.", 'Hunters');
+        log("--------------", 'Hunters');
+    }
 }
 
 function ModifyPlayer(Pawn Other){
     local DeusExPlayer P;
+    local LobbyWatcher lw;
     
     P = DeusExPlayer(Other);
     Super.ModifyPlayer(Other);
     
+
     if(!hasHunterPlayerInfo(P) && bHSOn && !bWaitingNewRound && !bHidePhase && !bWaitingForPlayers){
-        CreatePlayerHunterInfo(P);
-        if(IsOpenDX()){
-            P.SetPropertyText("TeamName", "Hiding");
-            P.PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "Hiding");
-        }
-        BroadcastMessage("|P3"$P.PlayerReplicationInfo.PlayerName$" has joined the hunt.");
-    } 
+        if(bEnableLobbySystem){
+            if(IsOpenDX()){
+                lw = Spawn(class'LobbyWatcher');
+                lw.DXP = p;
+                BroadcastMessage("|P3"$P.PlayerReplicationInfo.PlayerName$" has joined the lobby.");
+            }
+        }else{
+            CreatePlayerHunterInfo(P);
+            if(IsOpenDX()){
+                P.SetPropertyText("TeamName", "Hiding");
+                P.PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "Hiding");
+            }
+            BroadcastMessage("|P3"$P.PlayerReplicationInfo.PlayerName$" has joined the hunt.");
+        } 
+    }
+
     // Give players on the hunter team the weapon when they respawn
     if(hasHunterPlayerInfo(P) && GetHunterPlayerInfo(P).Hunting) GiveHunterWeapon(P);
     
@@ -264,7 +283,7 @@ function CleanupHunter(){
     foreach allactors(class'WeaponHunter',PGS) PGS.Destroy();
     foreach allactors(class'HunterInfo',inf) inf.Destroy();
     foreach allactors(class'DeusExWeapon',W) W.bHidden = False;
-    
+    ReleaseLobby();
     
 }
 
@@ -678,9 +697,22 @@ function GiveHunterWeapon(DeusExPlayer p){
     inv.Destroy();
 }
 
-function LockPlayersCam(Actor Other){
-    local DeusExPlayer DXP;
-    foreach AllActors(class'DeusExPlayer', DXP) LockPlayerCam(DXP, Other);
+function ForceSpectate(DeusExPlayer DXP, optional bool bCancel){
+    if(isOpenDX()){
+        if(!bCancel){
+            DXP.GoToState('Spectating');
+        } else {
+            DXP.GotoState('PlayerWalking');
+        }
+    } else {DXP.ClientMessage("|P2ERROR: Spectate not supported here. Report as bug!");}
+}
+
+function ReleaseLobby(){
+    local LobbyWatcher lw;
+    foreach AllActors(class'LobbyWatcher', lw) {
+        lw.DXP.GotoState('PlayerWalking');
+        lw.Destroy();
+    }
 }
 
 function UnlockPlayersCam(){
@@ -722,6 +754,7 @@ defaultproperties
     bLighting=True
     bTimeLimit=False
     TimeLimit=600
+    bEnableLobbySystem=True
     bHuntCamera=True
     HuntCameraTime=7
     WaitCheckTime=10
