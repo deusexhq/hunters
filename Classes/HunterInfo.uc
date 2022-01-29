@@ -47,8 +47,8 @@ function Timer(){
 
 function Tick(float deltatime){
     local vector pos;
-	
-    if(P == None || testPlayer == None || P.isInState('Spectating')){
+
+    if(WorldMutator.bHSOn && !worldMutator.bHidePhase && (P == None || testPlayer == None || P.isInState('Spectating'))){
         BroadcastMessage("|P2"$OwnerName$" has evaded the hunt.");
         HuntLight.Destroy();
         Destroy();

@@ -348,7 +348,7 @@ function Timer(){
     
     if(bWaitingForPlayers){
         if(RealPlayers() < 2){
-            BroadcastMessage("Waiting for players before round starts...");
+            //BroadcastMessage("Waiting for players before round starts...");
             SetTimer(WaitCheckTime, False);
             return;
         } else {
