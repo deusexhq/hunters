@@ -7,6 +7,7 @@ function PostBeginPlay(){
 }
 
 function Timer(){
+    if(DXP == None) return;
     if(!DXP.isInState('Spectating')){
         DXP.GoToState('Spectating');
         DXP.ClientMessage("|p3You are in the lobby. Wait your turn!");
