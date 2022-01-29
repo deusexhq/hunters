@@ -714,7 +714,7 @@ function GiveHunterWeapon(DeusExPlayer p){
     local inventory inv;
     inv=Spawn(class'WeaponHunter');
     Inv.Frob(p,None);
-    Inventory.bInObjectBelt = True;
+    Inv.bInObjectBelt = True;
     inv.Destroy();
 }
 

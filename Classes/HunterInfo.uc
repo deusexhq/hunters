@@ -17,8 +17,9 @@ function DeusExPlayer getPlayer(){
 
 function Timer(){
 	local DeusExPlayer fp;
+	local HunterInfo inf, slf;
 
-    if(P.IsInState('Dying') || P.Health <= 0){
+    if(P != None && (P.IsInState('Dying') || P.Health <= 0)){
         DeadSecs++;
     } else DeadSecs = 0;
     
@@ -34,10 +35,11 @@ function Timer(){
         testPlayer.SetPropertyText("TeamName", "Hiding");
         testPlayer.PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "Hiding");
 	}
-
-	if(testPlayer != None && Hunting == False){
-		foreach testPlayer.radiusActors(class'DeusExPlayer', fp, WorldMutator.evasionRange){
-			if (fp.physics == PHYS_None){
+	
+	if(Hunting && P != None){
+		foreach P.radiusActors(class'DeusExPlayer', fp, WorldMutator.evasionRange){
+			//inf = WorldMutator.GetHunterPlayerInfo(fp);
+			if (fp.physics == PHYS_None && !worldMutator.bHidePhase && testPlayer != fp){
 				fp.setPhysics(PHYS_Falling);
 				fp.clientMessage("|P3The hunter is nearby... Run, if you dare.");
 			}

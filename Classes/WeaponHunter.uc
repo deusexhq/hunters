@@ -13,7 +13,7 @@ state Idle
 		Super.BeginState();
 		inf = WorldMutator.GetHunterPlayerInfo(DeusExPlayer(Owner));
 
-		if (WorldMutator.isOpenDX() && inf != None && inf.Hunting){
+		if (WorldMutator.isOpenDX() && inf != None && inf.Hunting && DeusExPlayer(Owner) != None){
 			DeusExPlayer(Owner).SetPropertyText("TeamName", "Hunters");
 		    DeusExPlayer(Owner).PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "Hunters");
 		}
