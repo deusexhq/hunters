@@ -6,11 +6,18 @@ var string OwnerName;
 var bool Hunting;
 var bool PrimeHunter;
 var HuntersMut WorldMutator;
-var DeusExPlayer FoundBy;
+var DeusExPlayer FoundBy, testPlayer;
 var Beam HuntLight;
 var int DeadSecs;
 
+function DeusExPlayer getPlayer(){
+    local DeusExPlayer dxp;
+    foreach AllActors(class'DeusExPlayer', dxp){ if(dxp.PlayerReplicationInfo.PlayerName == ownerName) return dxp;}
+}
+
 function Timer(){
+	local DeusExPlayer fp;
+
     if(P.IsInState('Dying') || P.Health <= 0){
         DeadSecs++;
     } else DeadSecs = 0;
@@ -20,12 +27,28 @@ function Timer(){
         HuntLight.Destroy();
         Destroy();
     }
+
+	testPlayer = getPlayer();
+
+	if (WorldMutator.isOpenDX() && testPlayer != None && !Hunting) {
+        testPlayer.SetPropertyText("TeamName", "Hiding");
+        testPlayer.PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "Hiding");
+	}
+
+	if(testPlayer != None && Hunting == False){
+		foreach testPlayer.radiusActors(class'DeusExPlayer', fp, WorldMutator.evasionRange){
+			if (fp.physics == PHYS_None){
+				fp.setPhysics(PHYS_Falling);
+				fp.clientMessage("|P3The hunter is nearby... Run, if you dare.");
+			}
+		}
+	}
 }
 
 function Tick(float deltatime){
     local vector pos;
-
-    if(P == None || P.isInState('Spectating')){
+	
+    if(P == None || testPlayer == None || P.isInState('Spectating')){
         BroadcastMessage("|P2"$OwnerName$" has evaded the hunt.");
         HuntLight.Destroy();
         Destroy();

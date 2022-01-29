@@ -5,6 +5,21 @@ class WeaponHunter extends DeusExWeapon;
 
 var HuntersMut WorldMutator;
 
+state Idle
+{
+	function BeginState()
+	{
+		local HunterInfo inf;
+		Super.BeginState();
+		inf = WorldMutator.GetHunterPlayerInfo(DeusExPlayer(Owner));
+
+		if (WorldMutator.isOpenDX() && inf != None && inf.Hunting){
+			DeusExPlayer(Owner).SetPropertyText("TeamName", "Hunters");
+		    DeusExPlayer(Owner).PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "Hunters");
+		}
+	}
+}
+
 simulated function PreBeginPlay()
 {
     Super.PreBeginPlay();

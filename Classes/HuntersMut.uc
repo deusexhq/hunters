@@ -47,11 +47,13 @@ var() config bool bCleanupMap; //Do cleanup to remove non-needed stuff
 var() config bool bAutoStart; //Start a new game when map starts
 var() config int WaitCheckTime; //Time to wait for checking new player count
 var() config bool bEnableLobbySystem; //TC_ODX: Enable system to force players in to spectate when they join late
+var() config int EvasionRange; //Range at which players can move once hunter is nearby
 //Scoring
 var() config int ScorePerCatch, ScorePerRoundWin; //How much score does the player get per player caught, and per round win
 var() config int MaxRounds;
 var() config bool bRoundLimit;
 var() config bool bUseStandardVictoryCondition;
+
 //Camera
 var() config bool bHuntCamera;
 var() config int HuntCameraTime;
@@ -181,9 +183,13 @@ function BeginHunter(DeusExPlayer Seeker){
     
     BroadcastMessage("[Hunt] |P2Hunters game, round "$HideRound$", has begun.");
     BroadcastMessage("[Hunt] "$Seeker.PlayerReplicationInfo.PlayerName$" is now a Hunter.");
-    if(IsOpenDX()) PrimeHunter.P.ConsoleCommand("CreateTeam2 Hunters"); //If OpenDX is installed, set the hunter to a team to show in the scoreboard
+    if(IsOpenDX()) PrimeHunter.P.ConsoleCommand("CreateTeam2 Hunters"); //If OpenDX is installed, set the hunter to a team to show in the scoreboard'
 
+	PrimeHunter.P.SetPhysics(PHYS_None);
+	PrimeHunter.P.ClientMessage("|P2An unknown force prevents you from moving.");
     //Giving players the hide phase
+	
+
     bHidePhase=True;
     SetTimer(TimeToHide,False);
     
@@ -205,7 +211,7 @@ function BeginHunter(DeusExPlayer Seeker){
         
         foreach allactors(class'AutoTurretGun',atg) { atg.bHidden = True; }
         
-        foreach allactors(class'SecurityCamera',cam) { cam.Untrigger(Seeker, Seeker); cam.bActive = False; }
+        foreach allactors(class'SecurityCamera',cam) { cam.bActive = False; cam.Untrigger(None, None);  }
         
         foreach allactors(class'ComputerSecurity',sc) { sc.bHidden = True; }
         
@@ -334,6 +340,7 @@ function Timer(){
     local HunterInfo h;
     local int hunters, hiders, total;
     local int timeRemaining;
+	local DeusExWeapon w;
     
     // Do nothing if game is not running
     if(!bHSOn && !bWaitingNewRound) return;
@@ -365,16 +372,29 @@ function Timer(){
         BroadcastMessage("|P2[Hunt] The hunt is on.");
         bHidePhase=False;
         GiveHunterWeapon(PrimeHunter.P);
+		
+		
         foreach allactors(class'DeusExPlayer',DXP) {
             if(!DXP.isinState('Spectating')) {
                 DXP.bHidden=False;
+				DXP.SetPhysics(PHYS_None);
+				if(DXP != PrimeHunter.P) DXP.ClientMessage("|P2An unknown force prevents you from moving.");
             }
         }
+		PrimeHunter.P.ClientMessage("|P3You are able to move again.");
+		PrimeHunter.P.SetPhysics(PHYS_Falling);
+
         //Start the timer loop for displaying player info
         SetTimer(1, False);
     } else {
         //We're in a game, so let's show some info
         
+		//SPECIAL EXCEPTION
+		//Weapon cleanup
+		foreach AllActors(class'DeusExWeapon', w){
+			if(!w.isA('WeaponHunter')) w.bHidden = True;
+		}
+
         //Count each team's player count
         foreach AllActors(class'HunterInfo', h){ 
             if(h.Hunting) { 
@@ -669,6 +689,7 @@ function HunterInfo CreateHunterInfo(int id){
     local DeusExPlayer dxp;
     h = Spawn(class'HunterInfo');
     h.P = getPlayer(id);
+	h.testPlayer = getPlayer(id);
     h.WorldMutator = self;
     h.SetTimer(1, True);
     h.OwnerName = h.P.PlayerReplicationInfo.PlayerName;
@@ -734,6 +755,7 @@ function UnLockPlayerCam(deusexplayer dxp){
 
 defaultproperties
 {
+	EvasionRange=100
     bHideWeapons=True
     bUnlockDoors=True
     TimeToHide=60
