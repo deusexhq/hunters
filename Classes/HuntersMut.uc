@@ -282,6 +282,7 @@ function CleanupHunter(){
             DXP.SetPropertyText("TeamName", "");
             DXP.PlayerReplicationInfo.SetPropertyText("TeamNamePRI", "");
         }
+        dxp.SetPhysics(PHYS_Falling);
         if(bLighting) LightOff(dxp);
         bHidden=False;
     }

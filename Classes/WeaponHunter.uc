@@ -94,6 +94,7 @@ function ProcessTraceHit(Actor Other, Vector HitLocation, Vector HitNormal, Vect
             BroadcastMessage("|P7"$them.PlayerReplicationInfo.PlayerName$" was caught by "$me.PlayerReplicationInfo.PlayerName);
             WorldMutator.GiveHunterWeapon(them);
             WorldMutator.LightUp(them);
+            them.SetPhysics(PHYS_Falling);
             bGood = True;
             if(WorldMutator.bPlaySounds) me.ClientPlaySound(WorldMutator.HunterCatchSnd);
             if(WorldMutator.bPlaySounds) them.ClientPlaySound(WorldMutator.PlayerCaughtSnd);
